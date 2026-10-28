@@ -1,46 +1,45 @@
-🚗 Argus Tech Info Popup
+# Argus Tech Info Popup
 
-Tampermonkey user script that displays a technical summary popup on Argus car spec pages, with color-coded performance data.
+Userscript showing a colour-coded technical summary on L'argus spec-sheet pages.
 
-This userscript enhances the user experience on largus.fr by automatically extracting key technical specifications from car data sheets and presenting them in a clean, color-coded popup for quick evaluation.
-✨ Features
+[![Userscript](https://img.shields.io/badge/userscript-v2.1-blue)](argus-tech-info-popup.user.js) [![License: MPL 2.0](https://img.shields.io/badge/license-MPL%202.0-brightgreen)](LICENSE) [![No dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)](#how-it-works)
 
-    Automatically displays a popup panel on Argus technical pages with car specs such as:
+Spec sheets are long tables where the numbers that matter are buried. This script lifts them into a single colour-coded popup.
 
-        Length, weight, trunk capacity
+## What it does
 
-        Real max power, top speed, acceleration
+- Shows a popup summarising the key technical figures of the vehicle.
+- Colour-codes each value so a good figure is obvious at a glance.
+- Includes the real maximum power, which the page does not surface directly.
 
-        Urban fuel consumption, wheel size, and architecture
+## Where it runs
 
-    Color-coded values for quick visual benchmarking (green = strong, red = weak, etc.)
+- `largus.fr/fiche-technique/*`
 
-    Highlights architecture (e.g. "quatre cylindres") with a separate styling logic
+## Installation
 
-    Fully non-intrusive and easy to dismiss (click outside or close icon)
+1. Install [Tampermonkey](https://www.tampermonkey.net/) for your browser.
+2. Open [`argus-tech-info-popup.user.js`](argus-tech-info-popup.user.js) and click **Raw**.
 
-    Works automatically on pages under https://www.largus.fr/fiche-technique/*
+Tampermonkey picks up the install prompt automatically. Updates are served through `@updateURL`, so later versions are offered without reinstalling.
 
-📊 Evaluation Logic
+## How it works
 
-Each spec is evaluated using thresholds defined in the script. For example:
+A single `.user.js` file of plain DOM code: no build step, no bundler, no external library.
 
-    A top speed above 200 km/h is green, between 190–200 is orange, and below is red.
+## Related
 
-    Reverse scoring is applied to acceleration and fuel consumption (lower is better).
+Part of a set of car-shopping userscripts:
+[Leboncoin](https://github.com/sisichakal/Leboncoin-Search-Helper) ·
+[La Centrale](https://github.com/sisichakal/La-Centrale-Search-Helper) ·
+[L'argus](https://github.com/sisichakal/Argus-Tech-Info-Popup) ·
+[Caradisiac](https://github.com/sisichakal/Caradisiac-Tech-Info-Popup) ·
+[La Centrale spec sheets](https://github.com/sisichakal/lacentrale-tech-info-popup)
 
-    Architecture is scored by the number of cylinders.
+## Known limitations
 
-🔧 Installation
+- Selectors track the site's current markup and will need updating when it changes.
 
-    Install Tampermonkey (browser extension)
+## License
 
-    Create a new script and paste the source code
-
-    Visit any Argus fiche technique page and wait 2–3 seconds for the popup to appear
-
-📦 Compatibility
-
-    Designed for modern versions of largus.fr
-
-    Dynamically adapts to changes in the page using a MutationObserver
+[Mozilla Public License 2.0](LICENSE).
