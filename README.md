@@ -104,9 +104,9 @@ const MY_SITE = {
 
 Supersedes three separate scripts, one per site, which carried identical thresholds and popup code:
 
-- `Argus-Tech-Info-Popup` — this repository, up to v2.1
-- `Caradisiac-Tech-Info-Popup` — archived
-- `lacentrale-tech-info-popup` — archived
+- `Argus-Tech-Info-Popup` — this repository, renamed, up to v2.1
+- `Caradisiac-Tech-Info-Popup` — merged in, repository removed
+- `lacentrale-tech-info-popup` — merged in, repository removed
 
 ## License
 
