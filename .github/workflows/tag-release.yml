@@ -1,0 +1,51 @@
+name: Tag release
+
+# Reads @version from the userscript on every push to main and, when that
+# version has no tag yet, creates the tag and a matching GitHub release.
+# The header stays the single source of truth for the version number.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '*.user.js'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read @version from the userscript
+        id: meta
+        run: |
+          file=$(ls *.user.js | head -1)
+          version=$(grep -m1 '^// @version' "$file" | tr -d '\r' | awk '{print $3}')
+          if [ -z "$version" ]; then
+            echo "No @version found in $file" >&2
+            exit 1
+          fi
+          echo "file=$file"       >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Create the tag and release when the version is new
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v${{ steps.meta.outputs.version }}"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "$tag already exists, nothing to do."
+            exit 0
+          fi
+          git tag "$tag"
+          git push origin "$tag"
+          gh release create "$tag" \
+            --title "$tag" \
+            --generate-notes \
+            "${{ steps.meta.outputs.file }}"
