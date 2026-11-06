@@ -2,7 +2,7 @@
 
 A userscript showing a colour-coded technical summary on L'argus, Caradisiac and La Centrale spec-sheet pages.
 
-[![Userscript](https://img.shields.io/badge/userscript-v3.0-blue)](car-tech-info-popup.user.js)
+[![Userscript](https://img.shields.io/badge/userscript-v3.1-blue)](car-tech-info-popup.user.js)
 [![License: MPL 2.0](https://img.shields.io/badge/license-MPL%202.0-brightgreen)](LICENSE)
 [![No dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)](#how-it-works)
 
@@ -36,7 +36,18 @@ A popup lists twelve figures, each tinted green, orange, red or black against a 
 | Réservoir | no |
 | Architecture | fewer than four cylinders counts against |
 
-Each consumption row also shows the **range** it implies, computed from the tank size — the figure the spec sheet never gives you.
+The last two rows are the **petrol and diesel** set. Litres and kilowatt-hours measure different things, and a fuel tank does not exist on a battery car, so the energy block is chosen from the `Énergie` row of the spec sheet:
+
+| Powertrain | Energy rows |
+| --- | --- |
+| Petrol, diesel, LPG | Conso urbain / mixte / extra, Réservoir |
+| Electric | Conso élec. urbaine / mixte, Batterie, Autonomie |
+| Hybrid | both sets |
+| Not stated | petrol and diesel set, unchanged |
+
+On electric and hybrid listings an energy row with no value is dropped instead of being printed as `N/A`. That matters here: **L'argus publishes none of these figures on its electric spec sheets**, so the popup omits the block entirely rather than showing four empty lines. Petrol and diesel keep every row, so a blank there still reads as "looked for, not found".
+
+Each fuel consumption row also shows the **range** it implies, computed from the tank size — the figure the spec sheet never gives you.
 
 The spare wheel appears as an icon next to the wheel size: a tyre for a full-size spare, a cross for anything else.
 
@@ -97,7 +108,8 @@ const MY_SITE = {
 ## Known limitations
 
 - Selectors track each site's current markup and will need updating when it changes.
-- Search terms are matched as substrings, so a short term can also match a longer label: `urbain` matches *extra-urbaine* too. Terms are tried in order and the page is read top to bottom, which resolves it on today's layouts, but it is worth knowing when adding one.
+- Search terms are matched as substrings, so a short term can also match a longer label: `urbain` matches *extra-urbaine* too, and `consommation électrique` matches *consommation électrique urbaine*. A field can set `exclude` to drop the labels a shorter term would otherwise swallow; without it, terms are tried in order and the page is read top to bottom.
+- The electric labels are confirmed against L'argus. Caradisiac and La Centrale are covered by a broader list of terms, but neither has been checked on a real electric spec sheet.
 - La Centrale publishes no usable figure for the seats-down boot volume, so that half of the row stays `N/A`.
 
 ## History

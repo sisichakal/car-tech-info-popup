@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Car Tech Info Popup
 // @namespace    http://tampermonkey.net/
-// @version      3.0
-// @description  Affiche un pop-in avec les informations techniques colorées sur les fiches L'argus, Caradisiac et La Centrale
+// @version      3.1
+// @description  Affiche un pop-in avec les informations techniques colorées sur les fiches L'argus, Caradisiac et La Centrale, avec des lignes énergie adaptées au thermique, à l'électrique ou à l'hybride
 // @author       You
 // @match        https://www.largus.fr/fiche-technique/*
 // @match        https://www.caradisiac.com/fiches-techniques/*
@@ -43,6 +43,10 @@
         acceleration:[8, 9, 10],
         urbain:      [6, 7, 8],
         puissance:   [150, 120, 90],
+        // Electric equivalents, in kWh/100 km, kWh of usable battery and km
+        consoElec:   [15, 18, 22],
+        batterie:    [70, 55, 40],
+        autonomie:   [450, 350, 250],
     };
 
     const NEUTRAL = { color: '#999999', background: '#99999920' };
@@ -147,8 +151,22 @@
     // =========================================================================
 
     function makeReaders(candidatesFor) {
-        function readNumber(terms) {
-            for (const raw of candidatesFor(terms)) {
+        // Terms match as substrings, so "consommation électrique" also hits
+        // "consommation électrique urbaine" — and on a page listing both, the
+        // urban row comes first and wins. `exclude` drops the labels a shorter
+        // term would otherwise swallow.
+        function* values(terms, exclude) {
+            for (const { label, value } of candidatesFor(terms)) {
+                const lower = (label || '').toLowerCase();
+                if (exclude && exclude.some(word => lower.includes(word))) {
+                    continue;
+                }
+                yield value;
+            }
+        }
+
+        function readNumber(terms, exclude) {
+            for (const raw of values(terms, exclude)) {
                 const match = joinThousands(raw).match(/[\d,]+\.?\d*/);
                 if (match && match[0] !== '') {
                     return match[0].replace(',', '.');
@@ -158,8 +176,8 @@
         }
 
         // Tyre sizes are written "205/55 R16" — only the rim diameter matters.
-        function readWheel(terms) {
-            for (const raw of candidatesFor(terms)) {
+        function readWheel(terms, exclude) {
+            for (const raw of values(terms, exclude)) {
                 const match = raw.match(/R(\d+)/i);
                 if (match) {
                     return match[1];
@@ -168,8 +186,8 @@
             return MISSING;
         }
 
-        function readText(terms) {
-            for (const raw of candidatesFor(terms)) {
+        function readText(terms, exclude) {
+            for (const raw of values(terms, exclude)) {
                 if (raw) {
                     return raw;
                 }
@@ -190,11 +208,51 @@
                 }
                 const label = (cells[0].textContent || '').trim();
                 if (label.toLowerCase().includes(term.toLowerCase())) {
-                    yield (cells[1].textContent || '').trim();
+                    yield { label, value: (cells[1].textContent || '').trim() };
                 }
             }
         }
     }
+
+    // Reduce a free-text fuel label to the only distinction that changes which
+    // energy rows make sense. Accents are stripped first: L'argus prints
+    // "Electrique" where La Centrale prints "Électrique".
+    function deaccent(value) {
+        return value.normalize('NFD').replace(/[̀-ͯ]/g, '');
+    }
+
+    function classifyPowertrain(label) {
+        if (!label || label === MISSING) {
+            return 'unknown';
+        }
+        const text = deaccent(label).toLowerCase();
+        // Checked first: "hybride rechargeable" and "hybride essence
+        // electrique" both name one of the other two families
+        if (text.includes('hybri')) {
+            return 'hybrid';
+        }
+        if (text.includes('electri')) {
+            return 'electric';
+        }
+        if (/essence|diesel|gazole|gpl|gnv|bicarburation|ethanol|sans plomb/.test(text)) {
+            return 'thermal';
+        }
+        return 'unknown';
+    }
+
+    // The three sites word these rows alike, so the terms are shared and simply
+    // spread into each adapter's field map. Anything a site does not publish
+    // comes back MISSING and its row is dropped.
+    const ENERGY_FIELDS = {
+        energie:         { terms: ['énergie', 'carburant', 'motorisation'], mode: 'text' },
+        consoElecUrbain: { terms: ['consommation électrique urbaine', 'consommation urbaine électrique'] },
+        consoElecMixte:  { terms: ['consommation mixte électrique', 'consommation électrique', 'consommation wltp'],
+                           exclude: ['urbain', 'autoroute', 'extra'] },
+        // "capacité" first: a bare "batterie" also matches rows such as
+        // "Injection = Batterie lithium-ion", which hold no figure
+        batterie:        { terms: ['capacité utile de la batterie', 'capacité de la batterie', 'capacité batterie', 'capacité utile'] },
+        autonomie:       { terms: ['autonomie wltp', 'autonomie électrique', 'autonomie'] },
+    };
 
     // =========================================================================
     // SITE ADAPTERS
@@ -235,13 +293,14 @@
                         }
                     }
                     if (value && value.classList.contains('valeur')) {
-                        yield (value.textContent || value.innerText || '').trim();
+                        yield { label: text, value: (value.textContent || value.innerText || '').trim() };
                     }
                 }
             }
         },
 
         fields: {
+            ...ENERGY_FIELDS,
             longueur:     { terms: ['longueur'] },
             largeur:      { terms: ['largeur'] },
             poids:        { terms: ['poids à vide'] },
@@ -286,6 +345,7 @@
         },
 
         fields: {
+            ...ENERGY_FIELDS,
             longueur:     { terms: ['longueur'] },
             largeur:      { terms: ['largeur sans rétros', 'largeur'] },
             poids:        { terms: ['poids à vide'] },
@@ -293,7 +353,8 @@
             puissance:    { terms: ['puissance din', 'puissance maxi', 'puissance ch'] },
             vitesseMax:   { terms: ['vitesse maxi', 'vitesse maximale'] },
             acceleration: { terms: ['0 à 100', '0-100'] },
-            urbain:       { terms: ['urbain', 'consommation urbaine', 'cycle urbain'] },
+            // 'urbain' alone also matches 'consommation extra-urbaine'
+            urbain:       { terms: ['urbain', 'consommation urbaine', 'cycle urbain'], exclude: ['extra'] },
             mixte:        { terms: ['mixte', 'consommation mixte'] },
             extraUrbain:  { terms: ['extra-urbain', 'extra urbain', 'consommation extra'] },
             reservoir:    { terms: ['réservoir', 'capacité réservoir'] },
@@ -342,7 +403,7 @@
                     }
                     const label = (titleEl.textContent || '').trim().toLowerCase();
                     if (label.includes(term.toLowerCase())) {
-                        yield (valueEl.textContent || '').trim();
+                        yield { label, value: (valueEl.textContent || '').trim() };
                     }
                 }
             }
@@ -351,6 +412,7 @@
         },
 
         fields: {
+            ...ENERGY_FIELDS,
             longueur:     { terms: ['longueur'] },
             largeur:      { terms: ['largeur sans rétros', 'largeur'] },
             poids:        { terms: ['poids à vide'] },
@@ -460,19 +522,68 @@
         const data = {};
         for (const [name, spec] of Object.entries(site.fields)) {
             if (spec.mode === 'text') {
-                data[name] = read.readText(spec.terms);
+                data[name] = read.readText(spec.terms, spec.exclude);
             } else if (spec.mode === 'wheel') {
-                data[name] = read.readWheel(spec.terms);
+                data[name] = read.readWheel(spec.terms, spec.exclude);
             } else {
-                data[name] = read.readNumber(spec.terms);
+                data[name] = read.readNumber(spec.terms, spec.exclude);
             }
         }
         return data;
     }
 
-    function buildRows(site, data) {
-        const withUnit = (value, unit) => (value !== MISSING ? value + unit : MISSING);
+    const withUnit = (value, unit) => (value !== MISSING ? value + unit : MISSING);
 
+    // Litres and kilowatt-hours measure different things, and a fuel tank does
+    // not exist on an electric car, so the energy block is chosen by powertrain
+    // rather than printed in full every time.
+    //
+    // For electric and hybrid listings, rows with no value are dropped instead
+    // of stacking up as N/A: L'argus, for one, publishes neither consumption
+    // nor battery capacity nor range on its electric spec sheets. Petrol and
+    // diesel keep every row, so a blank there still reads as "looked for, not
+    // found".
+    function buildEnergyRows(data, powertrain) {
+        const fuelRows = [
+            { label: 'Conso Urbain', value: data.urbain,
+              display: buildConsoLine(data.urbain, data.reservoir),
+              colorInfo: getColor(data.urbain, CRITERIA.urbain, true) },
+            { label: 'Conso Mixte', value: data.mixte,
+              display: buildConsoLine(data.mixte, data.reservoir),
+              colorInfo: getColor(data.mixte, CRITERIA.urbain, true) },
+            { label: 'Conso Extra', value: data.extraUrbain,
+              display: buildConsoLine(data.extraUrbain, data.reservoir),
+              colorInfo: getColor(data.extraUrbain, CRITERIA.urbain, true) },
+            { label: 'Réservoir', value: data.reservoir,
+              display: withUnit(data.reservoir, ' L'),
+              colorInfo: getColor(data.reservoir, CRITERIA.reservoir, false) },
+        ];
+
+        const electricRows = [
+            { label: 'Conso élec. urbaine', value: data.consoElecUrbain,
+              display: withUnit(data.consoElecUrbain, ' kWh/100km'),
+              colorInfo: getColor(data.consoElecUrbain, CRITERIA.consoElec, true) },
+            { label: 'Conso élec. mixte', value: data.consoElecMixte,
+              display: withUnit(data.consoElecMixte, ' kWh/100km'),
+              colorInfo: getColor(data.consoElecMixte, CRITERIA.consoElec, true) },
+            { label: 'Batterie', value: data.batterie,
+              display: withUnit(data.batterie, ' kWh'),
+              colorInfo: getColor(data.batterie, CRITERIA.batterie, false) },
+            { label: 'Autonomie', value: data.autonomie,
+              display: withUnit(data.autonomie, ' km'),
+              colorInfo: getColor(data.autonomie, CRITERIA.autonomie, false) },
+        ];
+
+        if (powertrain === 'electric') {
+            return electricRows.filter(row => row.value !== MISSING);
+        }
+        if (powertrain === 'hybrid') {
+            return [...fuelRows, ...electricRows].filter(row => row.value !== MISSING);
+        }
+        return fuelRows;
+    }
+
+    function buildRows(site, data) {
         const sizeDisplay = [withUnit(data.longueur, 'm'), withUnit(data.largeur, 'm')].join(' - ');
         const bootDisplay = [withUnit(data.coffre, 'L'), withUnit(data.coffreUtile, 'L')].join(' - ');
 
@@ -506,18 +617,7 @@
             { label: '0 à 100 km/h',
               display: withUnit(data.acceleration, ' s'),
               colorInfo: getColor(data.acceleration, CRITERIA.acceleration, true) },
-            { label: 'Conso Urbain',
-              display: buildConsoLine(data.urbain, data.reservoir),
-              colorInfo: getColor(data.urbain, CRITERIA.urbain, true) },
-            { label: 'Conso Mixte',
-              display: buildConsoLine(data.mixte, data.reservoir),
-              colorInfo: getColor(data.mixte, CRITERIA.urbain, true) },
-            { label: 'Conso Extra',
-              display: buildConsoLine(data.extraUrbain, data.reservoir),
-              colorInfo: getColor(data.extraUrbain, CRITERIA.urbain, true) },
-            { label: 'Réservoir',
-              display: withUnit(data.reservoir, ' L'),
-              colorInfo: getColor(data.reservoir, CRITERIA.reservoir, false) },
+            ...buildEnergyRows(data, classifyPowertrain(data.energie)),
             { label: 'Architecture',
               display: data.architecture,
               colorInfo: site.architectureColour(data.architecture) },
