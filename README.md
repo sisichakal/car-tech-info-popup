@@ -8,6 +8,10 @@ A userscript showing a colour-coded technical summary on L'argus, Caradisiac and
 
 Spec sheets are long tables where the figures that matter are buried. This script lifts them into a single popup and colours each one, so a good number is obvious at a glance.
 
+![The popup on an L'argus spec sheet, showing twelve colour-coded figures](docs/screenshot-argus.png)
+
+*A petrol Peugeot 308 on L'argus. `N/A` marks a figure the sheet does not publish — WLTP sheets give only the mixed cycle, so the urban and extra-urban rows stay empty.*
+
 ## Contents
 
 - [What it does](#what-it-does)
